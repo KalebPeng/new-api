@@ -20,9 +20,8 @@ import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import type { SystemStatus } from '../types'
 
-interface TermsFooterProps {
+interface TermsFooterProps extends React.HTMLAttributes<HTMLParagraphElement> {
   variant?: 'sign-in' | 'sign-up'
-  className?: string
   status?: SystemStatus | null
 }
 
@@ -30,6 +29,7 @@ export function TermsFooter({
   variant = 'sign-in',
   className,
   status,
+  ...props
 }: TermsFooterProps) {
   const { t } = useTranslation()
   const text =
@@ -64,7 +64,10 @@ export function TermsFooter({
   const [firstLink, secondLink] = activeLinks
 
   return (
-    <p className={cn('text-muted-foreground text-center text-xs', className)}>
+    <p
+      className={cn('text-muted-foreground text-center text-xs', className)}
+      {...props}
+    >
       {text}{' '}
       {firstLink && (
         <a
