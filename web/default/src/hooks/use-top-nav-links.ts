@@ -114,7 +114,8 @@ export function useTopNavLinks(): TopNavLink[] {
   }, [status?.HeaderNavModules])
 
   // Documentation link (may be external)
-  const docsLink: string | undefined = status?.docs_link as string | undefined
+  // 2026/5/18 注释：当前不需要“文档”和“关于”入口，先从主页导航隐藏，保留代码便于后续恢复。
+  // const docsLink: string | undefined = status?.docs_link as string | undefined
 
   const isAuthed = !!auth?.user
 
@@ -145,18 +146,20 @@ export function useTopNavLinks(): TopNavLink[] {
   }
 
   // Docs (supports external links)
-  if (modules?.docs !== false) {
-    if (docsLink) {
-      links.push({ title: t('Docs'), href: docsLink, external: true })
-    } else {
-      links.push({ title: t('Docs'), href: '/docs' })
-    }
-  }
-
+  // 2026/5/18 注释：当前不需要“文档”和“关于”入口，先从主页导航隐藏，保留代码便于后续恢复。
+  // if (modules?.docs !== false) {
+  //   if (docsLink) {
+  //     links.push({ title: t('Docs'), href: docsLink, external: true })
+  //   } else {
+  //     links.push({ title: t('Docs'), href: '/docs' })
+  //   }
+  // }
+  //
   // About
-  if (modules?.about !== false) {
-    links.push({ title: t('About'), href: '/about' })
-  }
+  // 2026/5/18 注释：当前不需要“文档”和“关于”入口，先从主页导航隐藏，保留代码便于后续恢复。
+  // if (modules?.about !== false) {
+  //   links.push({ title: t('About'), href: '/about' })
+  // }
 
   return links
 }
