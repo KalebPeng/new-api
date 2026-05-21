@@ -18,6 +18,7 @@ services:
   new-api:
     image: new-api-local
     container_name: new-api
+    
     restart: always
     command: --log-dir /app/logs
     ports:
