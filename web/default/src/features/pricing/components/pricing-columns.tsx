@@ -117,8 +117,9 @@ export function usePricingColumns(
       ),
       cell: ({ row }) => {
         const model = row.original
-        const vendorIcon = model.vendor_icon
-          ? getLobeIcon(model.vendor_icon, 14)
+        const modelIconKey = model.icon || model.vendor_icon
+        const vendorIcon = modelIconKey
+          ? getLobeIcon(modelIconKey, 14)
           : null
 
         return (

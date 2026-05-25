@@ -56,8 +56,9 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
   const tags = parseTags(props.model.tags)
   const groups = props.model.enable_groups || []
   const endpoints = props.model.supported_endpoint_types || []
-  const vendorIcon = props.model.vendor_icon
-    ? getLobeIcon(props.model.vendor_icon, 28)
+  const modelIconKey = props.model.icon || props.model.vendor_icon
+  const vendorIcon = modelIconKey
+    ? getLobeIcon(modelIconKey, 28)
     : null
   const initial = props.model.model_name?.charAt(0).toUpperCase() || '?'
   const isDynamicPricing =

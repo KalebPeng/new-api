@@ -267,8 +267,9 @@ function OverviewSummaryGrid(props: { model: PricingModel }) {
 function ModelHeader(props: { model: PricingModel }) {
   const { t } = useTranslation()
   const model = props.model
-  const vendorIcon = model.vendor_icon
-    ? getLobeIcon(model.vendor_icon, 20)
+  const modelIconKey = model.icon || model.vendor_icon
+  const vendorIcon = modelIconKey
+    ? getLobeIcon(modelIconKey, 20)
     : null
   const description = model.description || model.vendor_description || null
   const tags = parseTags(model.tags)
