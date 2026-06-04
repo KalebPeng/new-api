@@ -47,60 +47,47 @@ export function useTopNavLinks(): TopNavLink[] {
   const { status } = useStatus()
   const { auth } = useAuthStore()
 
-  // Parse HeaderNavModules
   const modules = useMemo(() => {
     return parseHeaderNavModulesFromStatus(
       status as Record<string, unknown> | null
     )
   }, [status])
 
-  // Documentation link (may be external)
-  // 2026/5/18 注释：当前不需要“文档”和“关于”入口，先从主页导航隐藏，保留代码便于后续恢复。
-  // const docsLink: string | undefined = status?.docs_link as string | undefined
-
+  const docsLink: string | undefined = status?.docs_link as string | undefined
   const isAuthed = !!auth?.user
-
   const links: TopNavLink[] = []
 
-  // Home
   if (modules?.home !== false) {
     links.push({ title: t('Home'), href: '/' })
   }
 
-  // Console -> /dashboard (new console path)
   if (modules?.console !== false) {
     links.push({ title: t('Console'), href: '/dashboard' })
   }
 
-  // Pricing
   const pricing = modules?.pricing
   if (pricing && typeof pricing === 'object' && pricing.enabled) {
     const requiresAuth = pricing.requireAuth && !isAuthed
     links.push({ title: t('Model Square'), href: '/pricing', requiresAuth })
   }
 
-  // Rankings
   const rankings = modules?.rankings
   if (rankings && typeof rankings === 'object' && rankings.enabled) {
     const requiresAuth = rankings.requireAuth && !isAuthed
     links.push({ title: t('Rankings'), href: '/rankings', requiresAuth })
   }
 
-  // Docs (supports external links)
-  // 2026/5/18 注释：当前不需要“文档”和“关于”入口，先从主页导航隐藏，保留代码便于后续恢复。
-  // if (modules?.docs !== false) {
-  //   if (docsLink) {
-  //     links.push({ title: t('Docs'), href: docsLink, external: true })
-  //   } else {
-  //     links.push({ title: t('Docs'), href: '/docs' })
-  //   }
-  // }
-  //
-  // About
-  // 2026/5/18 注释：当前不需要“文档”和“关于”入口，先从主页导航隐藏，保留代码便于后续恢复。
-  // if (modules?.about !== false) {
-  //   links.push({ title: t('About'), href: '/about' })
-  // }
+  if (modules?.docs !== false) {
+    if (docsLink) {
+      links.push({ title: t('Docs'), href: docsLink, external: true })
+    } else {
+      links.push({ title: t('Docs'), href: '/docs' })
+    }
+  }
+
+  if (modules?.about !== false) {
+    links.push({ title: t('About'), href: '/about' })
+  }
 
   return links
 }
