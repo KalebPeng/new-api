@@ -51,6 +51,22 @@ func (a *Adaptor) ConvertAudioRequest(c *gin.Context, info *relaycommon.RelayInf
 		return nil, errors.New("unsupported audio relay mode")
 	}
 
+	encoding := mapEncoding(request.ResponseFormat)
+	c.Set(contextKeyResponseFormat, encoding)
+
+	// V3 HTTP unidirectional (HTTP Chunked) path, selected by model name.
+	if isVolcengineV3TTSModel(info.OriginModelName) {
+		resourceID, _ := volcengineV3ResourceID(info.OriginModelName)
+		c.Set(contextKeyV3TTSResourceID, resourceID)
+
+		v3Request, v3Err := buildV3TTSRequest(request, encoding)
+		if v3Err != nil {
+			return nil, v3Err
+		}
+		c.Set(contextKeyV3TTSRequest, v3Request)
+		return marshalV3TTSRequest(v3Request)
+	}
+
 	appID, token, err := parseVolcengineAuth(info.ApiKey)
 	if err != nil {
 		return nil, err
@@ -58,9 +74,6 @@ func (a *Adaptor) ConvertAudioRequest(c *gin.Context, info *relaycommon.RelayInf
 
 	voiceType := mapVoiceType(request.Voice)
 	speedRatio := lo.FromPtrOr(request.Speed, 0.0)
-	encoding := mapEncoding(request.ResponseFormat)
-
-	c.Set(contextKeyResponseFormat, encoding)
 
 	volcRequest := VolcengineTTSRequest{
 		App: VolcengineTTSApp{
@@ -275,6 +288,9 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 			return fmt.Sprintf("%s/api/v3/responses", baseUrl), nil
 		case constant.RelayModeAudioSpeech:
 			if baseUrl == channelconstant.ChannelBaseURLs[channelconstant.ChannelTypeVolcEngine] {
+				if isVolcengineV3TTSModel(info.OriginModelName) {
+					return "https://openspeech.bytedance.com/api/v3/tts/unidirectional", nil
+				}
 				return "wss://openspeech.bytedance.com/api/v1/tts/ws_binary", nil
 			}
 			return fmt.Sprintf("%s/v1/audio/speech", baseUrl), nil
@@ -288,6 +304,25 @@ func (a *Adaptor) SetupRequestHeader(c *gin.Context, req *http.Header, info *rel
 	channel.SetupApiRequestHeader(info, c, req)
 
 	if info.RelayMode == constant.RelayModeAudioSpeech {
+		if isVolcengineV3TTSModel(info.OriginModelName) {
+			req.Set("Content-Type", "application/json")
+			req.Set("X-Api-Resource-Id", c.GetString(contextKeyV3TTSResourceID))
+			req.Set("X-Api-Request-Id", generateRequestID())
+			// Request the final frame to include usage (text_words) for billing.
+			req.Set("X-Control-Require-Usage-Tokens-Return", "text_words")
+
+			// Old console keys are formatted as "appid|access_key" and use the
+			// X-Api-App-Id + X-Api-Access-Key pair; new console keys are a single
+			// token sent via X-Api-Key.
+			if parts := strings.Split(info.ApiKey, "|"); len(parts) == 2 {
+				req.Set("X-Api-App-Id", parts[0])
+				req.Set("X-Api-Access-Key", parts[1])
+			} else {
+				req.Set("X-Api-Key", info.ApiKey)
+			}
+			return nil
+		}
+
 		parts := strings.Split(info.ApiKey, "|")
 		if len(parts) == 2 {
 			req.Set("Authorization", "Bearer;"+parts[1])
@@ -337,7 +372,9 @@ func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, request
 		}
 
 		if baseUrl == channelconstant.ChannelBaseURLs[channelconstant.ChannelTypeVolcEngine] {
-			if info.IsStream {
+			// V3 models use a real HTTP request; only the V1 WebSocket path
+			// short-circuits here.
+			if info.IsStream && !isVolcengineV3TTSModel(info.OriginModelName) {
 				return nil, nil
 			}
 		}
@@ -355,6 +392,12 @@ func (a *Adaptor) DoResponse(c *gin.Context, resp *http.Response, info *relaycom
 
 	if info.RelayMode == constant.RelayModeAudioSpeech {
 		encoding := mapEncoding(c.GetString(contextKeyResponseFormat))
+
+		// V3 HTTP unidirectional (HTTP Chunked) response handling.
+		if isVolcengineV3TTSModel(info.OriginModelName) {
+			return handleV3TTSResponse(c, resp, info, encoding)
+		}
+
 		if info.IsStream {
 			volcRequestInterface, exists := c.Get(contextKeyTTSRequest)
 			if !exists {
