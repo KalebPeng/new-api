@@ -66,13 +66,16 @@ func testChannel(channel *model.Channel, testModel string, endpointType string, 
 		constant.ChannelTypeKling,
 		constant.ChannelTypeJimeng,
 		constant.ChannelTypeDoubaoVideo,
-		constant.ChannelTypeVidu,
 	}
 	if lo.Contains(unsupportedTestChannelTypes, channel.Type) {
 		channelTypeName := constant.GetChannelTypeName(channel.Type)
 		return testResult{
 			localErr: fmt.Errorf("%s channel test is not supported", channelTypeName),
 		}
+	}
+
+	if channel.Type == constant.ChannelTypeVidu {
+		return testViduChannel(channel)
 	}
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -503,6 +506,44 @@ func testChannel(channel *model.Channel, testModel string, endpointType string, 
 		localErr:    nil,
 		newAPIError: nil,
 	}
+}
+
+func testViduChannel(channel *model.Channel) testResult {
+	baseURL := channel.GetBaseURL()
+	if baseURL == "" {
+		baseURL = "https://api.vidu.cn"
+	}
+	key, _, newAPIError := channel.GetNextEnabledKey()
+	if newAPIError != nil {
+		return testResult{
+			localErr:    newAPIError,
+			newAPIError: newAPIError,
+		}
+	}
+
+	url := fmt.Sprintf("%s/ent/v2/tasks/test_connectivity/creations", baseURL)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return testResult{localErr: err}
+	}
+	req.Header.Set("Authorization", "Token "+key)
+	req.Header.Set("Accept", "application/json")
+
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return testResult{localErr: fmt.Errorf("vidu connection failed: %w", err)}
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		body, _ := io.ReadAll(resp.Body)
+		return testResult{
+			localErr: fmt.Errorf("vidu auth failed (HTTP %d): %s", resp.StatusCode, string(body)),
+		}
+	}
+
+	return testResult{}
 }
 
 func attachTestBillingRequestInput(info *relaycommon.RelayInfo, request dto.Request) error {

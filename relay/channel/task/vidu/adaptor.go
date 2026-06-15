@@ -39,6 +39,30 @@ type requestPayload struct {
 	CallbackUrl       string   `json:"callback_url,omitempty"`
 }
 
+type imageRequestPayload struct {
+	Model       string   `json:"model"`
+	Images      []string `json:"images,omitempty"`
+	Prompt      string   `json:"prompt"`
+	Seed        int      `json:"seed,omitempty"`
+	AspectRatio string   `json:"aspect_ratio,omitempty"`
+	Resolution  string   `json:"resolution,omitempty"`
+	Quality     string   `json:"quality,omitempty"`
+	Payload     string   `json:"payload,omitempty"`
+	CallbackUrl string   `json:"callback_url,omitempty"`
+}
+
+var imageOnlyModels = []string{"viduimage-2", "q3-fast", "q2-pro", "q2-fast"}
+
+func isImageOnlyModel(modelName string) bool {
+	lower := strings.ToLower(modelName)
+	for _, m := range imageOnlyModels {
+		if m == lower {
+			return true
+		}
+	}
+	return false
+}
+
 type responsePayload struct {
 	TaskId            string   `json:"task_id"`
 	State             string   `json:"state"`
@@ -94,6 +118,8 @@ func (a *TaskAdaptor) ValidateRequestAndSetAction(c *gin.Context, info *relaycom
 	action := constant.TaskActionTextGenerate
 	if meatAction, ok := req.Metadata["action"]; ok {
 		action, _ = meatAction.(string)
+	} else if isImageOnlyModel(req.Model) {
+		action = constant.TaskActionImageGenerate
 	} else if req.HasImage() {
 		action = constant.TaskActionGenerate
 		if info.ChannelType == constant.ChannelTypeVidu {
@@ -116,19 +142,28 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 	}
 	req := v.(relaycommon.TaskSubmitReq)
 
-	body, err := a.convertToRequestPayload(&req, info)
-	if err != nil {
-		return nil, err
-	}
+	var data []byte
+	var err error
 
-	if info.Action == constant.TaskActionReferenceGenerate {
-		if strings.Contains(body.Model, "viduq2") {
-			// 参考图生视频只能用 viduq2 模型, 不能带有pro或turbo后缀 https://platform.vidu.cn/docs/reference-to-video
-			body.Model = "viduq2"
+	if info.Action == constant.TaskActionImageGenerate {
+		body, convErr := a.convertToImageRequestPayload(&req, info)
+		if convErr != nil {
+			return nil, convErr
 		}
+		data, err = common.Marshal(body)
+	} else {
+		body, convErr := a.convertToRequestPayload(&req, info)
+		if convErr != nil {
+			return nil, convErr
+		}
+		if info.Action == constant.TaskActionReferenceGenerate {
+			if strings.Contains(body.Model, "viduq2") {
+				body.Model = "viduq2"
+			}
+		}
+		data, err = common.Marshal(body)
 	}
 
-	data, err := common.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
@@ -138,6 +173,8 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 func (a *TaskAdaptor) BuildRequestURL(info *relaycommon.RelayInfo) (string, error) {
 	var path string
 	switch info.Action {
+	case constant.TaskActionImageGenerate:
+		path = "/reference2image"
 	case constant.TaskActionGenerate:
 		path = "/img2video"
 	case constant.TaskActionFirstTailGenerate:
@@ -213,7 +250,10 @@ func (a *TaskAdaptor) FetchTask(baseUrl, key string, body map[string]any, proxy 
 }
 
 func (a *TaskAdaptor) GetModelList() []string {
-	return []string{"viduq2", "viduq1", "vidu2.0", "vidu1.5"}
+	return []string{
+		"viduq2", "viduq1", "vidu2.0", "vidu1.5",
+		"viduimage-2", "q3-fast", "q2-pro", "q2-fast",
+	}
 }
 
 func (a *TaskAdaptor) GetChannelName() string {
@@ -223,6 +263,20 @@ func (a *TaskAdaptor) GetChannelName() string {
 // ============================
 // helpers
 // ============================
+
+func (a *TaskAdaptor) convertToImageRequestPayload(req *relaycommon.TaskSubmitReq, info *relaycommon.RelayInfo) (*imageRequestPayload, error) {
+	r := &imageRequestPayload{
+		Model:       taskcommon.DefaultString(info.UpstreamModelName, "viduimage-2"),
+		Images:      req.Images,
+		Prompt:      req.Prompt,
+		AspectRatio: taskcommon.DefaultString(req.Size, "16:9"),
+		Resolution:  "1K",
+	}
+	if err := taskcommon.UnmarshalMetadata(req.Metadata, r); err != nil {
+		return nil, errors.Wrap(err, "unmarshal metadata failed")
+	}
+	return r, nil
+}
 
 func (a *TaskAdaptor) convertToRequestPayload(req *relaycommon.TaskSubmitReq, info *relaycommon.RelayInfo) (*requestPayload, error) {
 	r := requestPayload{
