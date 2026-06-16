@@ -60,6 +60,14 @@ func isImageOnlyModel(modelName string) bool {
 			return true
 		}
 	}
+	// 模糊匹配：去掉分隔符后比较，处理用户模型映射（如 vidu/image-2 → viduimage-2）
+	norm := strings.ReplaceAll(strings.ReplaceAll(lower, "/", ""), "-", "")
+	for _, m := range imageOnlyModels {
+		mn := strings.ReplaceAll(strings.ReplaceAll(m, "/", ""), "-", "")
+		if norm == mn {
+			return true
+		}
+	}
 	return false
 }
 
